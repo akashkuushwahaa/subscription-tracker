@@ -1,31 +1,28 @@
-import mongoose from "mongoose";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
-import User from "../models/user.model.js";
-import {JWT_EXPIRES_IN, JWT_SECRET} from "../config/env.js";
-
-// What is a req body? --> req.body is an object containing data from the client (POST request)
+import User from '../models/user.model.js';
+import { JWT_SECRET, JWT_EXPIRES_IN } from '../config/env.js'
 
 export const signUp = async (req, res, next) => {
-    // Implement sign up logic here
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-        const { name,email, password } = req.body;
+        const { name, email, password } = req.body;
 
         // Check if a user already exists
         const existingUser = await User.findOne({ email });
 
-        if(existingUser){
-            const error = new Error("User already exist");
-            error.status = 409;
+        if(existingUser) {
+            const error = new Error('User already exists');
+            error.statusCode = 409;
             throw error;
         }
 
         // Hash password
-        const salt = await bcrypt.genSalt(10)
+        const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
         const newUsers = await User.create([{ name, email, password: hashedPassword }], { session });
@@ -37,11 +34,13 @@ export const signUp = async (req, res, next) => {
 
         res.status(201).json({
             success: true,
-            message: 'User successfully created',
-            token,
-            user: newUsers[0]
+            message: 'User created successfully',
+            data: {
+                token,
+                user: newUsers[0],
+            }
         })
-    }catch(error) {
+    } catch (error) {
         await session.abortTransaction();
         session.endSession();
         next(error);
@@ -49,37 +48,36 @@ export const signUp = async (req, res, next) => {
 }
 
 export const signIn = async (req, res, next) => {
-    try{
+    try {
         const { email, password } = req.body;
 
         const user = await User.findOne({ email });
 
-        if(!user){
-            const error = new Error("User does not exist");
-            error.status = 404;
+        if(!user) {
+            const error = new Error('User not found');
+            error.statusCode = 404;
             throw error;
         }
 
         const isPasswordValid = await bcrypt.compare(password, user.password);
 
-        if(!isPasswordValid){
-            const error = new Error('Invalid Password');
-            error.status = 401;
+        if(!isPasswordValid) {
+            const error = new Error('Invalid password');
+            error.statusCode = 401;
             throw error;
         }
 
-        const token = jwt.sign( { usesId: user._id }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN } );
+        const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 
-        res.status(201).json({
+        res.status(200).json({
             success: true,
-            message: 'User successfully logged in',
+            message: 'User signed in successfully',
             data: {
                 token,
                 user,
             }
-        })
-
-    } catch(error){
+        });
+    } catch (error) {
         next(error);
     }
 }
